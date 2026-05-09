@@ -1,13 +1,8 @@
 
 
-from scraper.code.extractor import BinanceP2PExtractor
-from processor import P2PProcessor
+from extractor import BinanceP2PExtractor
 
 # load data
-
 client = BinanceP2PExtractor()
-#data = client.main()
+data = client.run()
 
-# process data
-processor = P2PProcessor(client.supabase)
-processor.main()
