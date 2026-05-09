@@ -5,7 +5,6 @@ from supabase import create_client, Client
 import requests
 import os
 from dotenv import load_dotenv
-import traceback
 from rate_limiter import RateLimiter
 from datetime import datetime, timezone
 
