@@ -1,0 +1,5 @@
+# Ignore .env file in scraper/code
+*.env
+
+# Ignore all .log files
+*.log
