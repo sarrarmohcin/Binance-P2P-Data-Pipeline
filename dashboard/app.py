@@ -1,150 +1,337 @@
 import streamlit as st
+import requests
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from supabase import create_client, Client
-from dotenv import load_dotenv
-import os
 
-# --- 1. CONFIG & AUTH ---
-st.set_page_config(page_title="P2P Sentinel", layout="wide", page_icon="🛡️")
+API_URL = "http://localhost:8000/analytics"
 
-def get_supabase_client() -> Client:
-    load_dotenv()
-    url = os.environ.get("SUPABASE_URL") or st.secrets.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_KEY") or st.secrets.get("SUPABASE_KEY")
-    
-    if not url or not key:
-        st.error("Credentials missing. Check .env or Streamlit Secrets.")
-        st.stop()
-    return create_client(url, key)
+st.set_page_config(
+    page_title="Binance P2P Analytics",
+    layout="wide"
+)
 
-supabase = get_supabase_client()
+st.title("Binance P2P Analytics Dashboard")
 
-# --- 2. SIDEBAR FILTERS ---
-st.sidebar.title("🛡️ P2P Sentinel")
-selected_asset = st.sidebar.selectbox("Select Asset", ["USDT"])
-selected_fiat = st.sidebar.selectbox("Select Fiat", ["EUR", "USD"])
+# =========================================================
+# SIDEBAR FILTERS
+# =========================================================
 
-# --- 3. DATA LOADING (Updated with parameters to fix caching) ---
-@st.cache_data(ttl=30)
-def load_data(fiat_code, asset_code):
-    try:
-        # Fetch raw market data
-        raw_res = supabase.table("p2p_market_data") \
-            .select("*") \
-            .eq("fiat", fiat_code) \
-            .eq("asset", asset_code) \
-            .order("created_at", desc=True) \
-            .limit(100) \
-            .execute()
-        
-        # Fetch latest processed insight
-        insight_res = supabase.table("p2p_insights") \
-            .select("*") \
-            .eq("fiat", fiat_code) \
-            .eq("asset", asset_code) \
-            .order("processed_at", desc=True) \
-            .limit(1) \
-            .execute()
-        
-        df_raw = pd.DataFrame(raw_res.data)
-        insight_data = insight_res.data[0] if insight_res.data else None
-        
-        return df_raw, insight_data
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        return pd.DataFrame(), None
+st.sidebar.header("Filters")
 
-# Load data based on sidebar selection
-df, latest_insight = load_data(selected_fiat, selected_asset)
+asset = st.sidebar.selectbox(
+    "Asset",
+    ["USDT"]
+)
 
-# --- 4. DASHBOARD UI ---
+fiat = st.sidebar.selectbox(
+    "Fiat",
+    ["EUR", "USD"]
+)
 
-if latest_insight:
-    # -- TOP ROW: Metrics --
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Market Spread", f"{latest_insight.get('market_spread_pct', 0)}%")
-    m2.metric("Trust Score (Avg)", f"{latest_insight.get('market_trust_avg', 0)}/100")
-    m3.metric("Triangle Profit", f"{latest_insight.get('fx_rate_gap_pct', 0)}%")
-    m4.metric("Whale Ads (>10k)", latest_insight.get('whale_count', 0))
+trade_type = st.sidebar.selectbox(
+    "Trade Type",
+    ["BUY", "SELL"]
+)
 
-    # -- MIDDLE ROW: Visuals --
-    st.divider()
-    c1, c2 = st.columns([1, 1])
+window = st.sidebar.selectbox(
+    "Timeframe",
+    ["24h", "12h", "1h"]
+)
 
-    with c1:
-        st.subheader("⚖️ Spread Gauge")
-        val = latest_insight.get('market_spread_pct', 0)
-        fig_gauge = go.Figure(go.Indicator(
-            mode = "gauge+number",
-            value = val,
-            gauge = {
-                'axis': {'range': [0, 2]}, 
-                'bar': {'color': "#00CC96" if val < 0.5 else "#EF553B"},
-                'steps': [
-                    {'range': [0, 0.5], 'color': "rgba(0, 204, 150, 0.2)"},
-                    {'range': [0.5, 2], 'color': "rgba(239, 85, 59, 0.1)"}
-                ]
-            }
-        ))
-        fig_gauge.update_layout(height=300, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_gauge, use_container_width=True)
+# =========================================================
+# API CALLS
+# =========================================================
 
-    with c2:
-        st.subheader("🎯 Safety Scatter Plot")
-        if not df.empty:
-            fig_scatter = px.scatter(
-                df, x="price", y="trust_score", 
-                size="surplus_amount", color="is_pro",
-                hover_data=["merchant_name", "finish_rate", "payment_methods"],
-                title="Price vs. Reliability",
-                color_discrete_map={True: "#00CC96", False: "#636EFA"}
-            )
-            st.plotly_chart(fig_scatter, use_container_width=True)
+snapshot = requests.get(
+    f"{API_URL}/snapshot",
+    params={
+        "asset": asset,
+        "fiat": fiat,
+        "tf": window
+    }
+).json()
 
-    # -- BOTTOM ROW: Depth --
-    st.subheader("🌊 Order Book Depth (Sell Side)")
-    depth_data = latest_insight.get('order_book_depth', {})
-    if depth_data:
-        # Sort and clean labels like '(10.1, 10.2]'
-        depth_df = pd.DataFrame(list(depth_data.items()), columns=['Price Range', 'Volume'])
-        fig_depth = px.bar(depth_df, x='Price Range', y='Volume', 
-                           color='Volume', color_continuous_scale="Viridis",
-                           template="plotly_dark")
-        st.plotly_chart(fig_depth, use_container_width=True)
+spread = requests.get(
+    f"{API_URL}/spread",
+    params={
+        "asset": asset,
+        "fiat": fiat,
+        "tf": window
+    }
+).json()
 
-    # -- ADVERTISER SECTION --
-    st.divider()
-    st.subheader("👤 Advertiser Intelligence")
-    col1, col2, col3 = st.columns(3)
+spread_windows = requests.get(
+    f"{API_URL}/spread-all-windows",
+    params={
+        "asset": asset,
+        "fiat": fiat
+    }
+).json()
 
-    with col1:
-        v_ratio = latest_insight.get('verified_ratio', 0)
-        st.metric("Verified Merchant %", f"{round(v_ratio * 100, 1)}%")
-        st.caption("Percentage of Pro Merchants in the current batch")
+momentum = requests.get(
+    f"{API_URL}/momentum",
+    params={
+        "asset": asset,
+        "fiat": fiat,
+        "trade_type": trade_type
+    }
+).json()
 
-    with col2:
-        st.metric("Risky Ads", latest_insight.get('risky_ads', 0), delta="-Warning", delta_color="inverse")
-        st.caption("Ads from merchants with <85% completion rate")
+volatility = requests.get(
+    f"{API_URL}/volatility",
+    params={
+        "asset": asset,
+        "fiat": fiat,
+        "trade_type": trade_type
+    }
+).json()
 
-    with col3:
-        st.info(f"**Dominant Merchant:** {latest_insight.get('top_merchant', 'N/A')}")
-        st.caption("Most frequent advertiser in this market")
+liquidity = requests.get(
+    f"{API_URL}/liquidity",
+    params={
+        "asset": asset,
+        "fiat": fiat,
+        "trade_type": trade_type
+    }
+).json()
 
-    # -- RELIABILITY TABLE --
-    st.write("### 🏆 Top 5 Reliable Offers")
-    if not df.empty:
-        # Filter: Best Price + High Trust + Pro
-        reliable = df[(df['trust_score'] > 90) & (df['trade_type'] == 'BUY')].sort_values("price").head(5)
-        if not reliable.empty:
-            st.dataframe(
-                reliable[['merchant_name', 'price', 'finish_rate', 'month_orders', 'is_pro', 'payment_methods']],
-                use_container_width=True,
-                hide_index=True
-            )
-        else:
-            st.write("No high-trust ads found at the moment.")
+score = requests.get(
+    f"{API_URL}/efficiency-score",
+    params={
+        "asset": asset,
+        "fiat": fiat
+    }
+).json()
+
+leaderboard = requests.get(
+    f"{API_URL}/leaderboard"
+).json()
+
+cross_window = requests.get(
+    f"{API_URL}/cross-window",
+    params={
+        "asset": asset,
+        "fiat": fiat
+    }
+).json()
+
+# =========================================================
+# KPI ROW
+# =========================================================
+
+st.subheader("Market KPIs")
+
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric(
+    "Spread %",
+    spread.get("spread_pct", 0)
+)
+
+col2.metric(
+    "Net %",
+    spread.get("net_pct", 0)
+)
+
+col3.metric(
+    "Momentum %",
+    momentum.get("momentum_vs_24h_pct", 0)
+)
+
+col4.metric(
+    "Efficiency Score",
+    score.get("score", 0)
+)
+
+st.divider()
+
+# =========================================================
+# MARKET EFFICIENCY GAUGE
+# =========================================================
+
+st.subheader("Market Efficiency Gauge")
+
+fig_gauge = go.Figure(go.Indicator(
+    mode="gauge+number",
+    value=score.get("score", 0),
+    title={"text": "Efficiency Score"},
+    gauge={
+        "axis": {"range": [0, 100]},
+        "bar": {"thickness": 0.3},
+        "steps": [
+            {"range": [0, 40]},
+            {"range": [40, 70]},
+            {"range": [70, 100]}
+        ]
+    }
+))
+
+st.plotly_chart(fig_gauge, use_container_width=True)
+
+# =========================================================
+# SPREAD TREND CHART
+# =========================================================
+
+st.subheader("Spread Trend Across Windows")
+
+if isinstance(spread_windows, list) and len(spread_windows) > 0:
+
+    spread_df = pd.DataFrame(spread_windows)
+
+    fig_spread = px.bar(
+        spread_df,
+        x="window",
+        y="spread_pct",
+        text="spread_pct"
+    )
+
+    st.plotly_chart(fig_spread, use_container_width=True)
+
+# =========================================================
+# MOMENTUM TREND
+# =========================================================
+
+st.subheader("Price Momentum")
+
+momentum_df = pd.DataFrame({
+    "Window": ["1h", "12h", "24h"],
+    "Price": [
+        momentum.get("price_1h", 0),
+        momentum.get("price_12h", 0),
+        momentum.get("price_24h", 0),
+    ]
+})
+
+fig_momentum = px.line(
+    momentum_df,
+    x="Window",
+    y="Price",
+    markers=True
+)
+
+st.plotly_chart(fig_momentum, use_container_width=True)
+
+# =========================================================
+# VOLATILITY ANALYSIS
+# =========================================================
+
+st.subheader("Volatility Analysis")
+
+vol_rows = []
+
+for key in ["1h", "12h", "24h"]:
+    if key in volatility:
+        vol_rows.append({
+            "window": key,
+            "volatility_ratio": volatility[key]["volatility_ratio"]
+        })
+
+if vol_rows:
+    vol_df = pd.DataFrame(vol_rows)
+
+    fig_vol = px.bar(
+        vol_df,
+        x="window",
+        y="volatility_ratio",
+        text="volatility_ratio"
+    )
+
+    st.plotly_chart(fig_vol, use_container_width=True)
+
+# =========================================================
+# LIQUIDITY ANALYSIS
+# =========================================================
+
+st.subheader("Liquidity Analysis")
+
+liq_rows = []
+
+for key, val in liquidity.get("windows", {}).items():
+    liq_rows.append({
+        "window": key,
+        "liquidity": val["liquidity"]
+    })
+
+if liq_rows:
+    liq_df = pd.DataFrame(liq_rows)
+
+    fig_liq = px.bar(
+        liq_df,
+        x="window",
+        y="liquidity",
+        text="liquidity"
+    )
+
+    st.plotly_chart(fig_liq, use_container_width=True)
+
+# =========================================================
+# CROSS WINDOW TABLE
+# =========================================================
+
+st.subheader("Cross Window Comparison")
+
+if isinstance(cross_window, list) and len(cross_window) > 0:
+    cross_df = pd.DataFrame(cross_window)
+    st.dataframe(cross_df)
+
+# =========================================================
+# LEADERBOARD
+# =========================================================
+
+st.subheader("Market Leaderboard")
+
+if isinstance(leaderboard, list) and len(leaderboard) > 0:
+
+    leaderboard_df = pd.DataFrame(leaderboard)
+
+    st.dataframe(leaderboard_df)
+
+    fig_leader = px.bar(
+        leaderboard_df.head(10),
+        x="pair",
+        y="score",
+        text="score"
+    )
+
+    st.plotly_chart(fig_leader, use_container_width=True)
+
+elif isinstance(leaderboard, dict):
+
+    st.error("Leaderboard API Error")
+    st.json(leaderboard)
 
 else:
-    st.warning(f"No insight data found for {selected_asset}/{selected_fiat}. Run the processor.py script to generate stats.")
+    st.info("No leaderboard data available")
+
+# =========================================================
+# SNAPSHOT TABLE
+# =========================================================
+
+st.subheader("Market Snapshot")
+
+if isinstance(snapshot, dict):
+
+    snapshot_rows = []
+
+    for side, values in snapshot.items():
+
+        # ensure nested dict
+        if isinstance(values, dict):
+
+            row = values.copy()
+            row["side"] = side
+            snapshot_rows.append(row)
+
+    if len(snapshot_rows) > 0:
+
+        snapshot_df = pd.DataFrame(snapshot_rows)
+        st.dataframe(snapshot_df)
+
+    else:
+        st.warning("Snapshot returned no market rows")
+        st.json(snapshot)
+
+else:
+    st.error("Invalid snapshot response")
+    st.write(snapshot)

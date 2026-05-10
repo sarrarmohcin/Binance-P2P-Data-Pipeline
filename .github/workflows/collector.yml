@@ -32,5 +32,5 @@ jobs:
         python -m pip install --upgrade pip
         if [ -f scraper/requirements.txt ]; then pip install -r scraper/requirements.txt; fi
     - name: Run script
-      run: python scraper/main.py
+      run: python scraper/extractor.py
 
