@@ -2,20 +2,6 @@
 
 A Python analytics engine for analyzing Binance P2P market data.
 
-The engine provides:
-
-- Market snapshots
-- Spread analysis
-- Volatility analysis
-- Price momentum detection
-- Liquidity tracking
-- Market efficiency scoring
-- Arbitrage opportunity alerts
-- P2P premium vs spot analysis
-- Cross-window comparisons
-- Market leaderboards
-- Dashboard-ready KPIs
-
 Designed for:
 
 - P2P traders
@@ -58,42 +44,43 @@ The Extractor store a snapshot of the market every 15 minutes via GitHub Actions
 | `opportunity_score` | float          | Internal calculated score evaluating trade opportunity quality | `82.5`                     | Opportunity ranking/filtering             |
 
 
-## Multi-Window Analytics
+# Data storage
 
-All analytics can be computed across:
+Supabase used to store raw data, and aggregate data stored in Materialized View for every timeframe, the partman_pg used to partion table, and pg_cron used to run cron job to refresh views.
 
-- `1h` → short-term market state
-- `12h` → medium-term trend
-- `24h` → long-term baseline
+## Aggregated Data
 
-This allows detection of:
+| Column        | Description                      |
+| ------------- | -------------------------------- |
+| `asset`       | Crypto asset (USDT, BTC, ETH...) |
+| `fiat`        | Fiat currency (EUR, USD...)      |
+| `trade_type`  | BUY or SELL                      |
+| `avg_price`   | Average ad price                 |
+| `best_price`  | Best available price             |
+| `worst_price` | Worst available price            |
+| `liquidity`   | Total tradable quantity          |
+| `volatility`  | Standard deviation of prices     |
+| `adv_count`   | Number of active ads             |
+| `window`      | Aggregation window               |
 
-- Spread widening/compression
-- Volatility spikes
-- Liquidity growth/drain
-- Price momentum
-- Market regime shifts
 
----
+# Analytics API
 
-# Architecture
+A FastAPI application used to read data from Supabase database and compute market analytics metrics, The api provides:
 
-```text
-Market
-├── Helper
-│   ├── Fetch aggregated market views
-│   ├── Safe numeric conversion
-│   └── Multi-window queries
-│
-├── SpotPriceResolver
-│   ├── Resolve spot market prices
-│   └── Convert prices into fiat
-│
-└── Analytics Methods
-    ├── Spread analysis
-    ├── Volatility analysis
-    ├── Momentum analysis
-    ├── Liquidity analysis
-    ├── Efficiency scoring
-    ├── Opportunity scanning
-    └── Premium calculations
+- Market snapshots
+- Spread analysis
+- Volatility analysis
+- Price momentum detection
+- Liquidity tracking
+- Market efficiency scoring
+- Arbitrage opportunity alerts
+- P2P premium vs spot analysis
+- Cross-window comparisons
+- Market leaderboards
+- Dashboard-ready KPIs
+
+
+# Data visualization
+
+Streamlit used to create a simple dashboard, request data from API and create charts
