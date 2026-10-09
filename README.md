@@ -1,5 +1,7 @@
 # Binance P2P Analytics Engine
 
+![hero](hero.png)
+
 A Python analytics engine for analyzing Binance P2P market data.
 
 Designed for:
