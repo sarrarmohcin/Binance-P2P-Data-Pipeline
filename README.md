@@ -17,8 +17,8 @@ Designed for:
 
 # Data Extraction
 
-The binance P2P API used to extract data, using Request Fingerprint Rotation, Adaptive Rate Limiting, Exponential Backoff Retry. 
-The Extractor store a snapshot of the market every 15 minutes via GitHub Actions, clean and sotre data to Supabase PostgreSQL Database
+The Binance P2P API is used to extract data, using Request Fingerprint Rotation, Adaptive Rate Limiting, Exponential Backoff Retry. 
+The Extractor stores a snapshot of the market every 15 minutes via GitHub Actions, clean and store data to Supabase PostgreSQL Database
 
 | Field               | Type           | Description                                                    | Example                    | Usage                                     |
 | ------------------- | -------------- | -------------------------------------------------------------- | -------------------------- | ----------------------------------------- |
@@ -48,7 +48,7 @@ The Extractor store a snapshot of the market every 15 minutes via GitHub Actions
 
 # Data storage
 
-Supabase used to store raw data, and aggregate data stored in Materialized View for every timeframe, the partman_pg used to partion table, and pg_cron used to run cron job to refresh views.
+Supabase is used to store raw data, and aggregate data stored in Materialized View for every timeframe, the pg_partman used to partition table, and pg_cron is used to run cron jobs to refresh views.
 
 ## Aggregated Data
 
@@ -68,7 +68,7 @@ Supabase used to store raw data, and aggregate data stored in Materialized View 
 
 # Analytics API
 
-A FastAPI application used to read data from Supabase database and compute market analytics metrics, The api provides:
+A FastAPI application used to read data from Supabase database and compute market analytics metrics, The API provides:
 
 - Market snapshots
 - Spread analysis
@@ -85,4 +85,4 @@ A FastAPI application used to read data from Supabase database and compute marke
 
 # Data visualization
 
-Streamlit used to create a simple dashboard, request data from API and create charts
+Streamlit is used to create a simple dashboard, request data from API and create charts
