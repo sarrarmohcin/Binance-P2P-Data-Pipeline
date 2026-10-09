@@ -18,7 +18,7 @@ Designed for:
 # Data Extraction
 
 The Binance P2P API is used to extract data, using Request Fingerprint Rotation, Adaptive Rate Limiting, Exponential Backoff Retry. 
-The Extractor stores a snapshot of the market every 15 minutes via GitHub Actions, clean and store data to Supabase PostgreSQL Database
+The Extractor stores a snapshot of the market every 15 minutes via GitHub Actions, clean and stores data to Supabase PostgreSQL Database
 
 | Field               | Type           | Description                                                    | Example                    | Usage                                     |
 | ------------------- | -------------- | -------------------------------------------------------------- | -------------------------- | ----------------------------------------- |
